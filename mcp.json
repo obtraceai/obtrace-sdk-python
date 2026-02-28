@@ -1,0 +1,10 @@
+{
+  "mcp_version": "1.0",
+  "name": "obtrace-sdk-python",
+  "description": "MCP context metadata for Obtrace Python SDK repository",
+  "resources": [
+    { "id": "readme", "path": "README.md", "description": "Getting started and API usage" },
+    { "id": "docs-index", "path": "docs/index.md", "description": "Documentation index" },
+    { "id": "core-client", "path": "src/obtrace_sdk/client.py", "description": "Main SDK client" }
+  ]
+}

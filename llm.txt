@@ -1,0 +1,22 @@
+Obtrace SDK Python
+
+Purpose:
+- Python backend SDK for logs, metrics, spans, propagation, and HTTP instrumentation.
+
+Core modules:
+- obtrace_sdk.client
+- obtrace_sdk.context
+- obtrace_sdk.http
+- obtrace_sdk.otlp
+
+Framework coverage:
+- FastAPI middleware helper
+- Flask before/after hooks
+- requests/httpx instrumentation wrappers
+
+Design principle:
+- Thin SDK, no business rule authority.
+- Backend/ingest/control-plane is source of truth for policy and business logic.
+
+Reference contract:
+- specs/sdk/universal-contract-v1.md
