@@ -10,7 +10,7 @@ class ClientTests(unittest.TestCase):
         c = ObtraceClient(
             ObtraceConfig(
                 api_key="devkey",
-                ingest_base_url="http://127.0.0.1:8080",
+                ingest_base_url="https://injet.obtrace.ai",
                 service_name="py-test",
             )
         )
