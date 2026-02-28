@@ -3,7 +3,7 @@ from obtrace_sdk import ObtraceClient, ObtraceConfig
 client = ObtraceClient(
     ObtraceConfig(
         api_key="devkey",
-        ingest_base_url="https://injet.obtrace.ai",
+        ingest_base_url="https://inject.obtrace.ai",
         service_name="python-example",
         tenant_id="tenant-dev",
         project_id="project-dev",

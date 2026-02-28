@@ -41,7 +41,7 @@ from obtrace_sdk import ObtraceClient, ObtraceConfig
 client = ObtraceClient(
     ObtraceConfig(
         api_key="<API_KEY>",
-        ingest_base_url="https://injet.obtrace.ai",
+        ingest_base_url="https://inject.obtrace.ai",
         service_name="python-api",
         env="prod",
     )
