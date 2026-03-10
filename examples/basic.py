@@ -1,4 +1,4 @@
-from obtrace_sdk import ObtraceClient, ObtraceConfig
+from obtrace_sdk import ObtraceClient, ObtraceConfig, SemanticMetrics
 
 client = ObtraceClient(
     ObtraceConfig(
@@ -14,6 +14,6 @@ client = ObtraceClient(
 )
 
 client.log("info", "python sdk initialized")
-client.metric("python.example.metric", 1)
-client.span("python.example.span")
+client.metric(SemanticMetrics.RUNTIME_CPU_UTILIZATION, 0.41)
+client.span("checkout.charge", attrs={"feature.name": "checkout", "payment.provider": "stripe"})
 client.flush()
