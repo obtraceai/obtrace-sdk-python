@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from .context import ensure_propagation_headers, random_hex
 from .otlp import build_logs_payload, build_metric_payload, build_span_payload
+from .semantic_metrics import is_semantic_metric
 from .types import ObtraceConfig, SDKContext
 
 
@@ -31,6 +32,8 @@ class ObtraceClient:
         self._enqueue("/otlp/v1/logs", build_logs_payload(self.cfg, level, message, context))
 
     def metric(self, name: str, value: float, unit: str = "1", context: Optional[SDKContext] = None) -> None:
+        if self.cfg.validate_semantic_metrics and self.cfg.debug and not is_semantic_metric(name):
+            print(f"[obtrace-sdk-python] non-canonical metric name: {name}")
         self._enqueue("/otlp/v1/metrics", build_metric_payload(self.cfg, name, value, unit, context))
 
     def span(

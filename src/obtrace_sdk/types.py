@@ -16,6 +16,7 @@ class ObtraceConfig:
     env: Optional[str] = None
     request_timeout_sec: float = 5.0
     max_queue_size: int = 1000
+    validate_semantic_metrics: bool = False
     debug: bool = False
     default_headers: Dict[str, str] = field(default_factory=dict)
 

@@ -21,3 +21,30 @@ class SemanticMetrics:
     WEB_VITAL_CLS = "web.vital.cls"
     WEB_VITAL_TTFB = "web.vital.ttfb"
     USER_ACTIONS = "obtrace.sim.web.react.actions"
+
+
+def is_semantic_metric(name: str) -> bool:
+    return name in {
+        SemanticMetrics.THROUGHPUT,
+        SemanticMetrics.ERROR_RATE,
+        SemanticMetrics.LATENCY_P95,
+        SemanticMetrics.RUNTIME_CPU_UTILIZATION,
+        SemanticMetrics.RUNTIME_MEMORY_USAGE,
+        SemanticMetrics.RUNTIME_THREAD_COUNT,
+        SemanticMetrics.RUNTIME_GC_PAUSE,
+        SemanticMetrics.RUNTIME_EVENTLOOP_LAG,
+        SemanticMetrics.CLUSTER_CPU_UTILIZATION,
+        SemanticMetrics.CLUSTER_MEMORY_USAGE,
+        SemanticMetrics.CLUSTER_NODE_COUNT,
+        SemanticMetrics.CLUSTER_POD_COUNT,
+        SemanticMetrics.DB_OPERATION_LATENCY,
+        SemanticMetrics.DB_CLIENT_ERRORS,
+        SemanticMetrics.DB_CONNECTIONS_USAGE,
+        SemanticMetrics.MESSAGING_CONSUMER_LAG,
+        SemanticMetrics.WEB_VITAL_LCP,
+        SemanticMetrics.WEB_VITAL_FCP,
+        SemanticMetrics.WEB_VITAL_INP,
+        SemanticMetrics.WEB_VITAL_CLS,
+        SemanticMetrics.WEB_VITAL_TTFB,
+        SemanticMetrics.USER_ACTIONS,
+    }
