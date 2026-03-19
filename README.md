@@ -26,7 +26,7 @@ Required:
 - `ingest_base_url`
 - `service_name`
 
-Recommended:
+Optional (auto-resolved from API key on the server side):
 - `tenant_id`
 - `project_id`
 - `app_id`
@@ -34,6 +34,26 @@ Recommended:
 - `service_version`
 
 ## Quickstart
+
+### Simplified setup
+
+The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only three fields are needed:
+
+```python
+from obtrace_sdk import ObtraceClient, ObtraceConfig
+
+client = ObtraceClient(
+    ObtraceConfig(
+        api_key="obt_live_...",
+        ingest_base_url="https://ingest.obtrace.io",
+        service_name="my-service",
+    )
+)
+```
+
+### Full configuration
+
+For advanced use cases you can override the resolved values explicitly:
 
 ```python
 from obtrace_sdk import ObtraceClient, ObtraceConfig, SemanticMetrics
