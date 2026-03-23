@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import json
 import threading
 import time
@@ -27,14 +28,29 @@ class ObtraceClient:
         self.cfg = cfg
         self._queue: List[_Queued] = []
         self._lock = threading.Lock()
+        self._circuit_failures = 0
+        self._circuit_open_until = 0.0
+        atexit.register(self.flush)
+
+    def __enter__(self) -> ObtraceClient:
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self.flush()
+
+    @staticmethod
+    def _truncate(s: str, max_len: int) -> str:
+        if len(s) <= max_len:
+            return s
+        return s[:max_len] + "...[truncated]"
 
     def log(self, level: str, message: str, context: Optional[SDKContext] = None) -> None:
-        self._enqueue("/otlp/v1/logs", build_logs_payload(self.cfg, level, message, context))
+        self._enqueue("/otlp/v1/logs", build_logs_payload(self.cfg, level, self._truncate(message, 32768), context))
 
     def metric(self, name: str, value: float, unit: str = "1", context: Optional[SDKContext] = None) -> None:
         if self.cfg.validate_semantic_metrics and self.cfg.debug and not is_semantic_metric(name):
             print(f"[obtrace-sdk-python] non-canonical metric name: {name}")
-        self._enqueue("/otlp/v1/metrics", build_metric_payload(self.cfg, name, value, unit, context))
+        self._enqueue("/otlp/v1/metrics", build_metric_payload(self.cfg, self._truncate(name, 1024), value, unit, context))
 
     def span(
         self,
@@ -52,9 +68,13 @@ class ObtraceClient:
         start = start_unix_nano or str(int(time.time() * 1_000_000_000))
         end = end_unix_nano or str(int(time.time() * 1_000_000_000))
 
+        truncated_name = self._truncate(name, 32768)
+        if attrs:
+            attrs = {k: self._truncate(v, 4096) if isinstance(v, str) else v for k, v in attrs.items()}
+
         self._enqueue(
             "/otlp/v1/traces",
-            build_span_payload(self.cfg, name, t, s, start, end, status_code, status_message, attrs),
+            build_span_payload(self.cfg, truncated_name, t, s, start, end, status_code, status_message, attrs),
         )
         return {"trace_id": t, "span_id": s}
 
@@ -69,11 +89,36 @@ class ObtraceClient:
 
     def flush(self) -> None:
         with self._lock:
-            batch = list(self._queue)
-            self._queue.clear()
+            now = time.time()
+            if now < self._circuit_open_until:
+                return
+            half_open = self._circuit_failures >= 5
+            if half_open:
+                batch = self._queue[:1]
+                self._queue = self._queue[1:]
+            else:
+                batch = list(self._queue)
+                self._queue.clear()
 
         for item in batch:
-            self._send(item)
+            try:
+                self._send(item)
+                with self._lock:
+                    if self._circuit_failures > 0:
+                        if self.cfg.debug:
+                            print("[obtrace-sdk-python] circuit breaker closed")
+                        self._circuit_failures = 0
+                        self._circuit_open_until = 0.0
+            except Exception:  # noqa: BLE001
+                with self._lock:
+                    self._circuit_failures += 1
+                    if self._circuit_failures >= 5:
+                        self._circuit_open_until = time.time() + 30.0
+                        if self.cfg.debug:
+                            print("[obtrace-sdk-python] circuit breaker opened")
+                if self.cfg.debug:
+                    import traceback
+                    traceback.print_exc()
 
     def shutdown(self) -> None:
         self.flush()
@@ -81,19 +126,27 @@ class ObtraceClient:
     def _enqueue(self, endpoint: str, payload: Dict[str, Any]) -> None:
         with self._lock:
             if len(self._queue) >= self.cfg.max_queue_size:
+                if self.cfg.debug:
+                    print(f"[obtrace-sdk-python] queue full, dropping oldest item")
                 self._queue.pop(0)
             self._queue.append(_Queued(endpoint=endpoint, payload=payload))
 
     def _send(self, item: _Queued) -> None:
-        body = json.dumps(item.payload).encode("utf-8")
+        try:
+            body = json.dumps(item.payload).encode("utf-8")
+        except (TypeError, ValueError):
+            if self.cfg.debug:
+                print(f"[obtrace-sdk-python] failed to serialize payload for {item.endpoint}")
+            return
+
         req = urllib.request.Request(
             url=f"{self.cfg.ingest_base_url.rstrip('/')}{item.endpoint}",
             method="POST",
             data=body,
             headers={
+                **self.cfg.default_headers,
                 "Authorization": f"Bearer {self.cfg.api_key}",
                 "Content-Type": "application/json",
-                **self.cfg.default_headers,
             },
         )
         try:
@@ -101,6 +154,6 @@ class ObtraceClient:
                 code = int(getattr(res, "status", 200))
                 if code >= 300 and self.cfg.debug:
                     print(f"[obtrace-sdk-python] status={code} endpoint={item.endpoint}")
-        except urllib.error.URLError as exc:
+        except (urllib.error.URLError, TypeError, ValueError, OSError) as exc:
             if self.cfg.debug:
                 print(f"[obtrace-sdk-python] send failed endpoint={item.endpoint} err={exc}")
