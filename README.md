@@ -16,7 +16,7 @@ SDK is thin/dumb.
 ## Install
 
 ```bash
-pip install .
+pip install obtrace-sdk-python
 ```
 
 ## Configuration
