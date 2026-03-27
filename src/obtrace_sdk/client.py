@@ -31,6 +31,11 @@ class ObtraceClient:
         self._circuit_failures = 0
         self._circuit_open_until = 0.0
         atexit.register(self.flush)
+        self._auto_instrument()
+
+    def _auto_instrument(self) -> None:
+        from .logging_handler import install_logging_hook
+        install_logging_hook(self)
 
     def __enter__(self) -> ObtraceClient:
         return self
