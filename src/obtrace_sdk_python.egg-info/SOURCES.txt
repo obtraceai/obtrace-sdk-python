@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+src/obtrace_sdk/__init__.py
+src/obtrace_sdk/client.py
+src/obtrace_sdk/context.py
+src/obtrace_sdk/http.py
+src/obtrace_sdk/otlp.py
+src/obtrace_sdk/semantic_metrics.py
+src/obtrace_sdk/types.py
+src/obtrace_sdk_python.egg-info/PKG-INFO
+src/obtrace_sdk_python.egg-info/SOURCES.txt
+src/obtrace_sdk_python.egg-info/dependency_links.txt
+src/obtrace_sdk_python.egg-info/requires.txt
+src/obtrace_sdk_python.egg-info/top_level.txt
+tests/test_client.py
+tests/test_context.py
+tests/test_semantic_metrics.py
