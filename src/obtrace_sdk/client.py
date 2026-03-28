@@ -1,24 +1,18 @@
 from __future__ import annotations
 
-import atexit
-import json
-import threading
-import time
-import urllib.error
-import urllib.request
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+import logging
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, Optional
 
-from .context import ensure_propagation_headers, random_hex
-from .otlp import build_logs_payload, build_metric_payload, build_span_payload
+from opentelemetry._logs.severity import SeverityNumber
+from opentelemetry.instrumentation.logging.handler import LoggingHandler
+from opentelemetry.trace import StatusCode
+
+from .otel_setup import setup_otel
 from .semantic_metrics import is_semantic_metric
 from .types import ObtraceConfig, SDKContext
 
-
-@dataclass(slots=True)
-class _Queued:
-    endpoint: str
-    payload: Dict[str, Any]
+_SDK_SCOPE = "obtrace-sdk-python"
 
 
 class ObtraceClient:
@@ -26,41 +20,61 @@ class ObtraceClient:
         if not cfg.api_key or not cfg.ingest_base_url or not cfg.service_name:
             raise ValueError("api_key, ingest_base_url and service_name are required")
         self.cfg = cfg
-        self._queue: List[_Queued] = []
-        self._queue_bytes = 0
-        self._lock = threading.Lock()
-        self._flush_lock = threading.Lock()
-        self._circuit_failures = 0
-        self._circuit_open_until = 0.0
-        atexit.register(self.flush)
-        self._auto_instrument()
-
-    def _auto_instrument(self) -> None:
-        from .logging_handler import install_logging_hook
-        install_logging_hook(self)
-        if self.cfg.auto_instrument_http:
-            from .auto_http import install_http_instrumentation
-            install_http_instrumentation(self)
+        self._providers = setup_otel(cfg)
+        self._tracer = self._providers.tracer_provider.get_tracer(_SDK_SCOPE)
+        self._meter = self._providers.meter_provider.get_meter(_SDK_SCOPE)
+        self._logger = self._providers.logger_provider.get_logger(_SDK_SCOPE)
+        self._counters: Dict[str, Any] = {}
+        self._histograms: Dict[str, Any] = {}
+        self._otel_logging_handler = LoggingHandler(
+            level=logging.DEBUG,
+            logger_provider=self._providers.logger_provider,
+        )
+        logging.root.addHandler(self._otel_logging_handler)
 
     def __enter__(self) -> ObtraceClient:
         return self
 
     def __exit__(self, *_: Any) -> None:
-        self.flush()
-
-    @staticmethod
-    def _truncate(s: str, max_len: int) -> str:
-        if len(s) <= max_len:
-            return s
-        return s[:max_len] + "...[truncated]"
+        self.shutdown()
 
     def log(self, level: str, message: str, context: Optional[SDKContext] = None) -> None:
-        self._enqueue("/otlp/v1/logs", build_logs_payload(self.cfg, level, self._truncate(message, 32768), context))
+        severity = _level_to_severity(level)
+        attrs: Dict[str, Any] = {}
+        if context:
+            if context.trace_id:
+                attrs["obtrace.trace_id"] = context.trace_id
+            if context.span_id:
+                attrs["obtrace.span_id"] = context.span_id
+            if context.session_id:
+                attrs["obtrace.session_id"] = context.session_id
+            if context.route_template:
+                attrs["obtrace.route_template"] = context.route_template
+            if context.endpoint:
+                attrs["obtrace.endpoint"] = context.endpoint
+            if context.method:
+                attrs["obtrace.method"] = context.method
+            if context.status_code is not None:
+                attrs["obtrace.status_code"] = context.status_code
+            for k, v in context.attrs.items():
+                attrs[f"obtrace.attr.{k}"] = v
+        self._logger.emit(
+            body=message,
+            severity_text=level.upper(),
+            severity_number=_severity_number_enum(severity),
+            attributes=attrs if attrs else None,
+        )
 
     def metric(self, name: str, value: float, unit: str = "1", context: Optional[SDKContext] = None) -> None:
         if self.cfg.validate_semantic_metrics and self.cfg.debug and not is_semantic_metric(name):
             print(f"[obtrace-sdk-python] non-canonical metric name: {name}")
-        self._enqueue("/otlp/v1/metrics", build_metric_payload(self.cfg, self._truncate(name, 1024), value, unit, context))
+        attrs = {}
+        if context:
+            attrs = dict(context.attrs)
+        key = f"{name}:{unit}"
+        if key not in self._counters:
+            self._counters[key] = self._meter.create_gauge(name, unit=unit)
+        self._counters[key].set(value, attributes=attrs)
 
     def span(
         self,
@@ -73,20 +87,27 @@ class ObtraceClient:
         status_message: str = "",
         attrs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
-        t = trace_id if trace_id and len(trace_id) == 32 else random_hex(16)
-        s = span_id if span_id and len(span_id) == 16 else random_hex(8)
-        start = start_unix_nano or str(int(time.time() * 1_000_000_000))
-        end = end_unix_nano or str(int(time.time() * 1_000_000_000))
+        otel_span = self._tracer.start_span(name, attributes=attrs or {})
+        if status_code is not None and status_code >= 400:
+            otel_span.set_status(StatusCode.ERROR, status_message)
+        else:
+            otel_span.set_status(StatusCode.OK)
+        otel_span.end()
+        ctx = otel_span.get_span_context()
+        return {
+            "trace_id": format(ctx.trace_id, "032x"),
+            "span_id": format(ctx.span_id, "016x"),
+        }
 
-        truncated_name = self._truncate(name, 32768)
-        if attrs:
-            attrs = {k: self._truncate(v, 4096) if isinstance(v, str) else v for k, v in attrs.items()}
+    @contextmanager
+    def start_span(self, name: str, attrs: Optional[Dict[str, Any]] = None) -> Iterator[Any]:
+        with self._tracer.start_as_current_span(name, attributes=attrs or {}) as otel_span:
+            yield otel_span
 
-        self._enqueue(
-            "/otlp/v1/traces",
-            build_span_payload(self.cfg, truncated_name, t, s, start, end, status_code, status_message, attrs),
-        )
-        return {"trace_id": t, "span_id": s}
+    def capture_error(self, error: Exception, attrs: Optional[Dict[str, Any]] = None) -> None:
+        with self._tracer.start_as_current_span("exception") as otel_span:
+            otel_span.set_status(StatusCode.ERROR, str(error))
+            otel_span.record_exception(error, attributes=attrs or {})
 
     def inject_propagation(
         self,
@@ -95,75 +116,46 @@ class ObtraceClient:
         span_id: Optional[str] = None,
         session_id: Optional[str] = None,
     ) -> Dict[str, str]:
-        return ensure_propagation_headers(headers, trace_id, span_id, session_id)
+        from opentelemetry.propagate import inject
+        out = dict(headers or {})
+        inject(out)
+        if session_id:
+            out.setdefault("x-obtrace-session-id", session_id)
+        return out
 
     def flush(self) -> None:
-        if not self._flush_lock.acquire(blocking=False):
-            return
-        try:
-            with self._lock:
-                now = time.time()
-                if now < self._circuit_open_until:
-                    return
-                half_open = self._circuit_failures >= 5
-                if half_open:
-                    batch = self._queue[:1]
-                    self._queue = self._queue[1:]
-                else:
-                    batch = list(self._queue)
-                    self._queue.clear()
-                self._queue_bytes = sum(len(json.dumps(i.payload)) for i in self._queue)
-
-            for item in batch:
-                try:
-                    self._send(item)
-                    with self._lock:
-                        if self._circuit_failures > 0:
-                            self._circuit_failures = 0
-                            self._circuit_open_until = 0.0
-                except Exception:  # noqa: BLE001
-                    with self._lock:
-                        self._circuit_failures += 1
-                        if self._circuit_failures >= 5:
-                            self._circuit_open_until = time.time() + 30.0
-        finally:
-            self._flush_lock.release()
+        self._providers.tracer_provider.force_flush()
+        self._providers.meter_provider.force_flush()
+        self._providers.logger_provider.force_flush()
 
     def shutdown(self) -> None:
-        self.flush()
+        logging.root.removeHandler(self._otel_logging_handler)
+        self._providers.tracer_provider.shutdown()
+        self._providers.meter_provider.shutdown()
+        self._providers.logger_provider.shutdown()
 
-    def _enqueue(self, endpoint: str, payload: Dict[str, Any]) -> None:
-        payload_bytes = len(json.dumps(payload))
-        with self._lock:
-            while self._queue and (len(self._queue) >= self.cfg.max_queue_size or self._queue_bytes + payload_bytes > self.cfg.max_queue_bytes):
-                dropped = self._queue.pop(0)
-                self._queue_bytes -= len(json.dumps(dropped.payload))
-            self._queue.append(_Queued(endpoint=endpoint, payload=payload))
-            self._queue_bytes += payload_bytes
 
-    def _send(self, item: _Queued) -> None:
-        try:
-            body = json.dumps(item.payload).encode("utf-8")
-        except (TypeError, ValueError):
-            if self.cfg.debug:
-                print(f"[obtrace-sdk-python] failed to serialize payload for {item.endpoint}")
-            return
+def _level_to_severity(level: str) -> int:
+    mapping = {
+        "debug": 5,
+        "info": 9,
+        "warn": 13,
+        "warning": 13,
+        "error": 17,
+        "fatal": 21,
+        "critical": 21,
+    }
+    return mapping.get(level.lower(), 9)
 
-        req = urllib.request.Request(
-            url=f"{self.cfg.ingest_base_url.rstrip('/')}{item.endpoint}",
-            method="POST",
-            data=body,
-            headers={
-                **self.cfg.default_headers,
-                "Authorization": f"Bearer {self.cfg.api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=self.cfg.request_timeout_sec) as res:
-                code = int(getattr(res, "status", 200))
-                if code >= 300 and self.cfg.debug:
-                    print(f"[obtrace-sdk-python] status={code} endpoint={item.endpoint}")
-        except (urllib.error.URLError, TypeError, ValueError, OSError) as exc:
-            if self.cfg.debug:
-                print(f"[obtrace-sdk-python] send failed endpoint={item.endpoint} err={exc}")
+
+_SEVERITY_MAP = {
+    5: SeverityNumber.DEBUG,
+    9: SeverityNumber.INFO,
+    13: SeverityNumber.WARN,
+    17: SeverityNumber.ERROR,
+    21: SeverityNumber.FATAL,
+}
+
+
+def _severity_number_enum(num: int) -> SeverityNumber:
+    return _SEVERITY_MAP.get(num, SeverityNumber.INFO)

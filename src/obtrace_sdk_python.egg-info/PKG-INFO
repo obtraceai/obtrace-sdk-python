@@ -1,21 +1,28 @@
 Metadata-Version: 2.4
 Name: obtrace-sdk-python
-Version: 1.0.2
+Version: 2.0.0
 Summary: Obtrace Python SDK
 Author: Obtrace
 License-Expression: MIT
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Provides-Extra: requests
-Requires-Dist: requests>=2.31.0; extra == "requests"
-Provides-Extra: httpx
-Requires-Dist: httpx>=0.27.0; extra == "httpx"
-Provides-Extra: fastapi
-Requires-Dist: fastapi>=0.112.0; extra == "fastapi"
-Requires-Dist: starlette>=0.37.0; extra == "fastapi"
-Provides-Extra: flask
-Requires-Dist: flask>=3.0.0; extra == "flask"
+Requires-Dist: opentelemetry-sdk>=1.20.0
+Requires-Dist: opentelemetry-api>=1.20.0
+Requires-Dist: opentelemetry-exporter-otlp-proto-http>=1.20.0
+Provides-Extra: auto
+Requires-Dist: opentelemetry-instrumentation-requests; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-httpx; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-urllib; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-flask; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-fastapi; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-django; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-logging; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-psycopg2; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-redis; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-sqlalchemy; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-celery; extra == "auto"
+Requires-Dist: opentelemetry-instrumentation-grpc; extra == "auto"
 Dynamic: license-file
 
 # obtrace-sdk-python

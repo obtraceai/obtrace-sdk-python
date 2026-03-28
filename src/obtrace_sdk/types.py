@@ -15,8 +15,6 @@ class ObtraceConfig:
     app_id: Optional[str] = None
     env: Optional[str] = None
     request_timeout_sec: float = 5.0
-    max_queue_size: int = 1000
-    max_queue_bytes: int = 4 * 1024 * 1024
     validate_semantic_metrics: bool = False
     debug: bool = False
     auto_instrument_http: bool = True

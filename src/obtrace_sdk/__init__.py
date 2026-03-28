@@ -1,18 +1,17 @@
-from .auto_http import install_http_instrumentation, uninstall_http_instrumentation
-from .client import ObtraceClient, ObtraceConfig
-from .context import create_traceparent, ensure_propagation_headers
+from .client import ObtraceClient
 from .logging_handler import ObtraceLoggingHandler, install_logging_hook
+from .otel_setup import setup_otel, OtelProviders
 from .semantic_metrics import SemanticMetrics, is_semantic_metric
+from .types import ObtraceConfig, SDKContext
 
 __all__ = [
     "ObtraceClient",
     "ObtraceConfig",
     "ObtraceLoggingHandler",
+    "OtelProviders",
+    "SDKContext",
     "SemanticMetrics",
-    "install_http_instrumentation",
     "install_logging_hook",
     "is_semantic_metric",
-    "create_traceparent",
-    "ensure_propagation_headers",
-    "uninstall_http_instrumentation",
+    "setup_otel",
 ]
