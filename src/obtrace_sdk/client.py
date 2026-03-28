@@ -27,7 +27,9 @@ class ObtraceClient:
             raise ValueError("api_key, ingest_base_url and service_name are required")
         self.cfg = cfg
         self._queue: List[_Queued] = []
+        self._queue_bytes = 0
         self._lock = threading.Lock()
+        self._flush_lock = threading.Lock()
         self._circuit_failures = 0
         self._circuit_open_until = 0.0
         atexit.register(self.flush)
@@ -93,48 +95,48 @@ class ObtraceClient:
         return ensure_propagation_headers(headers, trace_id, span_id, session_id)
 
     def flush(self) -> None:
-        with self._lock:
-            now = time.time()
-            if now < self._circuit_open_until:
-                return
-            half_open = self._circuit_failures >= 5
-            if half_open:
-                batch = self._queue[:1]
-                self._queue = self._queue[1:]
-            else:
-                batch = list(self._queue)
-                self._queue.clear()
+        if not self._flush_lock.acquire(blocking=False):
+            return
+        try:
+            with self._lock:
+                now = time.time()
+                if now < self._circuit_open_until:
+                    return
+                half_open = self._circuit_failures >= 5
+                if half_open:
+                    batch = self._queue[:1]
+                    self._queue = self._queue[1:]
+                else:
+                    batch = list(self._queue)
+                    self._queue.clear()
+                self._queue_bytes = sum(len(json.dumps(i.payload)) for i in self._queue)
 
-        for item in batch:
-            try:
-                self._send(item)
-                with self._lock:
-                    if self._circuit_failures > 0:
-                        if self.cfg.debug:
-                            print("[obtrace-sdk-python] circuit breaker closed")
-                        self._circuit_failures = 0
-                        self._circuit_open_until = 0.0
-            except Exception:  # noqa: BLE001
-                with self._lock:
-                    self._circuit_failures += 1
-                    if self._circuit_failures >= 5:
-                        self._circuit_open_until = time.time() + 30.0
-                        if self.cfg.debug:
-                            print("[obtrace-sdk-python] circuit breaker opened")
-                if self.cfg.debug:
-                    import traceback
-                    traceback.print_exc()
+            for item in batch:
+                try:
+                    self._send(item)
+                    with self._lock:
+                        if self._circuit_failures > 0:
+                            self._circuit_failures = 0
+                            self._circuit_open_until = 0.0
+                except Exception:  # noqa: BLE001
+                    with self._lock:
+                        self._circuit_failures += 1
+                        if self._circuit_failures >= 5:
+                            self._circuit_open_until = time.time() + 30.0
+        finally:
+            self._flush_lock.release()
 
     def shutdown(self) -> None:
         self.flush()
 
     def _enqueue(self, endpoint: str, payload: Dict[str, Any]) -> None:
+        payload_bytes = len(json.dumps(payload))
         with self._lock:
-            if len(self._queue) >= self.cfg.max_queue_size:
-                if self.cfg.debug:
-                    print(f"[obtrace-sdk-python] queue full, dropping oldest item")
-                self._queue.pop(0)
+            while self._queue and (len(self._queue) >= self.cfg.max_queue_size or self._queue_bytes + payload_bytes > self.cfg.max_queue_bytes):
+                dropped = self._queue.pop(0)
+                self._queue_bytes -= len(json.dumps(dropped.payload))
             self._queue.append(_Queued(endpoint=endpoint, payload=payload))
+            self._queue_bytes += payload_bytes
 
     def _send(self, item: _Queued) -> None:
         try:
