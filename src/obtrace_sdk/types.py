@@ -19,6 +19,7 @@ class ObtraceConfig:
     max_queue_bytes: int = 4 * 1024 * 1024
     validate_semantic_metrics: bool = False
     debug: bool = False
+    auto_instrument_http: bool = True
     default_headers: Dict[str, str] = field(default_factory=dict)
 
 

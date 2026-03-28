@@ -38,6 +38,9 @@ class ObtraceClient:
     def _auto_instrument(self) -> None:
         from .logging_handler import install_logging_hook
         install_logging_hook(self)
+        if self.cfg.auto_instrument_http:
+            from .auto_http import install_http_instrumentation
+            install_http_instrumentation(self)
 
     def __enter__(self) -> ObtraceClient:
         return self
