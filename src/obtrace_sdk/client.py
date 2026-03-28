@@ -13,12 +13,18 @@ from .semantic_metrics import is_semantic_metric
 from .types import ObtraceConfig, SDKContext
 
 _SDK_SCOPE = "obtrace-sdk-python"
+_logger = logging.getLogger("obtrace")
+_initialized = False
 
 
 class ObtraceClient:
     def __init__(self, cfg: ObtraceConfig):
+        global _initialized
         if not cfg.api_key or not cfg.ingest_base_url or not cfg.service_name:
             raise ValueError("api_key, ingest_base_url and service_name are required")
+        if _initialized:
+            _logger.warning("obtrace: ObtraceClient already initialized, creating duplicate instance")
+        _initialized = True
         self.cfg = cfg
         self._providers = setup_otel(cfg)
         self._tracer = self._providers.tracer_provider.get_tracer(_SDK_SCOPE)
@@ -129,10 +135,12 @@ class ObtraceClient:
         self._providers.logger_provider.force_flush()
 
     def shutdown(self) -> None:
+        global _initialized
         logging.root.removeHandler(self._otel_logging_handler)
         self._providers.tracer_provider.shutdown()
         self._providers.meter_provider.shutdown()
         self._providers.logger_provider.shutdown()
+        _initialized = False
 
 
 def _level_to_severity(level: str) -> int:

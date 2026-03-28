@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
+
+logger = logging.getLogger("obtrace")
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
@@ -135,5 +138,5 @@ def _auto_instrument() -> None:
             instrumentor = getattr(mod, class_name)()
             if not instrumentor.is_instrumented_by_opentelemetry:
                 instrumentor.instrument()
-        except (ImportError, Exception):
-            pass
+        except (ImportError, Exception) as e:
+            logger.debug("obtrace: skipped %s: %s", module_path, e)

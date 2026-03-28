@@ -28,6 +28,9 @@ dependencies = [
     "opentelemetry-instrumentation-grpc",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
