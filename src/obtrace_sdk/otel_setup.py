@@ -113,14 +113,17 @@ def setup_otel(cfg: ObtraceConfig) -> OtelProviders:
         )
     )
 
-    if cfg.auto_instrument_http:
-        _auto_instrument()
-
-    return OtelProviders(
+    providers = OtelProviders(
         tracer_provider=tracer_provider,
         meter_provider=meter_provider,
         logger_provider=logger_provider,
     )
+
+    if cfg.auto_instrument_http:
+        import threading
+        threading.Thread(target=_auto_instrument, daemon=True).start()
+
+    return providers
 
 
 def _auto_instrument() -> None:
