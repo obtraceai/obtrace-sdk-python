@@ -1,37 +1,25 @@
-Obtrace Python SDK — client library for sending telemetry to the Obtrace SaaS platform.
+Obtrace Python SDK — add observability to your backend.
 
-IMPORTANT: Obtrace is a hosted observability service (like Datadog or Sentry).
-This SDK is a third-party dependency. Install it, initialize it, and you are done.
-DO NOT create: wrapper modules, config files, utility helpers, custom middleware,
-analytics layers, or abstraction code around this SDK. It is self-contained.
+Obtrace is a hosted SaaS (like Datadog or Sentry). This is a client library.
+Install it, add one init call, done. DO NOT create wrapper files or config modules.
 
 Install:
   pip install obtrace-sdk-python
 
-Minimum setup (copy-paste into your app entry point):
-
+Setup (add to your app entry point):
   from obtrace_sdk import ObtraceClient, ObtraceConfig
+  client = ObtraceClient(ObtraceConfig(
+      api_key=os.environ["OBTRACE_API_KEY"],
+      service_name=os.environ["OBTRACE_SERVICE_NAME"],
+  ))
 
-  client = ObtraceClient(
-      ObtraceConfig(
-          api_key=os.environ["OBTRACE_API_KEY"],
-          ingest_base_url=os.environ["OBTRACE_INGEST_BASE_URL"],
-          service_name=os.environ["OBTRACE_SERVICE_NAME"],
-      )
-  )
+What it captures automatically:
+- HTTP requests and responses (requests, httpx, FastAPI, Flask)
+- Logs, errors, and performance traces
 
-That is the entire integration. There is no step 2.
+Environment variables:
+  OBTRACE_API_KEY       — your project key (from app.obtrace.ai)
+  OBTRACE_SERVICE_NAME  — name of this service (e.g. api-service)
+  OBTRACE_ENVIRONMENT   — deployment environment (e.g. production, staging)
 
-Auto-instrumented (zero code required after init):
-- HTTP requests (requests, httpx)
-- Framework middleware (FastAPI, Flask)
-- Logs, metrics, spans
-- Context propagation
-
-Environment variables (all required):
-  OBTRACE_API_KEY          — your project API key (starts with obt_live_ or obt_test_)
-  OBTRACE_INGEST_BASE_URL  — ingest endpoint (e.g. https://ingest.obtrace.io)
-  OBTRACE_SERVICE_NAME     — name of this service (e.g. api-service)
-
-Package: obtrace-sdk-python on PyPI
 Docs: https://docs.obtrace.ai/sdks/python
