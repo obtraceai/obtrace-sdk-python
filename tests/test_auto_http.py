@@ -1,5 +1,6 @@
+import asyncio
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import requests
 import httpx
@@ -9,6 +10,7 @@ from obtrace_sdk.auto_http import (
     uninstall_http_instrumentation,
     _patched_requests,
     _patched_httpx,
+    _patched_httpx_async,
 )
 from obtrace_sdk.client import ObtraceClient
 from obtrace_sdk.types import ObtraceConfig
@@ -153,6 +155,88 @@ class TestAutoInstrumentHttpx(unittest.TestCase):
             self.assertTrue(len(span_calls) >= 1)
             log_calls = [c for c in log_mock.call_args_list if "httpx GET" in str(c)]
             self.assertTrue(len(log_calls) >= 1)
+
+
+class TestAutoInstrumentHttpxAsync(unittest.TestCase):
+    def setUp(self):
+        uninstall_http_instrumentation()
+
+    def tearDown(self):
+        uninstall_http_instrumentation()
+
+    def test_httpx_async_client_send_is_patched(self):
+        original = httpx.AsyncClient.send
+        client = _make_client()
+        install_http_instrumentation(client)
+        self.assertIsNot(httpx.AsyncClient.send, original)
+        uninstall_http_instrumentation()
+        self.assertIs(httpx.AsyncClient.send, original)
+
+    def test_httpx_async_adds_traceparent_header(self):
+        client = _make_client()
+        install_http_instrumentation(client)
+
+        fake_response = httpx.Response(200, request=httpx.Request("GET", "https://example.com"))
+
+        async def run():
+            with patch.object(httpx.AsyncClient, "_send_single_request", new_callable=AsyncMock, return_value=fake_response):
+                with patch("urllib.request.urlopen") as urlopen:
+                    cm = MagicMock()
+                    cm.__enter__.return_value.status = 202
+                    cm.__exit__.return_value = False
+                    urlopen.return_value = cm
+                    async with httpx.AsyncClient() as hc:
+                        req = httpx.Request("GET", "https://example.com/async-test")
+                        resp = await hc.send(req)
+            return resp, req
+
+        resp, req = asyncio.run(run())
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("traceparent", req.headers)
+
+    def test_httpx_async_instruments_span_and_log(self):
+        client = _make_client()
+        install_http_instrumentation(client)
+
+        fake_response = httpx.Response(200, request=httpx.Request("GET", "https://example.com"))
+
+        async def run():
+            with patch.object(client, "span", wraps=client.span) as span_mock, \
+                 patch.object(client, "log", wraps=client.log) as log_mock:
+                with patch.object(httpx.AsyncClient, "_send_single_request", new_callable=AsyncMock, return_value=fake_response):
+                    with patch("urllib.request.urlopen"):
+                        async with httpx.AsyncClient() as hc:
+                            req = httpx.Request("GET", "https://example.com/async-test")
+                            await hc.send(req)
+                return span_mock, log_mock
+
+        span_mock, log_mock = asyncio.run(run())
+        span_calls = [c for c in span_mock.call_args_list if "http.client" in str(c)]
+        self.assertTrue(len(span_calls) >= 1)
+        log_calls = [c for c in log_mock.call_args_list if "httpx.async GET" in str(c)]
+        self.assertTrue(len(log_calls) >= 1)
+
+    def test_httpx_async_error_path(self):
+        client = _make_client()
+        install_http_instrumentation(client)
+
+        async def run():
+            with patch.object(client, "span", wraps=client.span) as span_mock, \
+                 patch.object(client, "log", wraps=client.log) as log_mock:
+                with patch.object(httpx.AsyncClient, "_send_single_request", new_callable=AsyncMock, side_effect=ConnectionError("refused")):
+                    async with httpx.AsyncClient() as hc:
+                        req = httpx.Request("GET", "https://down.example.com")
+                        try:
+                            await hc.send(req)
+                        except ConnectionError:
+                            pass
+                        else:
+                            raise AssertionError("Expected ConnectionError")
+                return log_mock
+
+        log_mock = asyncio.run(run())
+        error_logs = [c for c in log_mock.call_args_list if "error" in str(c)]
+        self.assertTrue(len(error_logs) >= 1)
 
 
 class TestOptOut(unittest.TestCase):

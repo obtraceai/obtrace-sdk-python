@@ -11,8 +11,10 @@ if TYPE_CHECKING:
 
 _original_requests_send = None
 _original_httpx_send = None
+_original_httpx_async_send = None
 _patched_requests = False
 _patched_httpx = False
+_patched_httpx_async = False
 
 
 def _patch_requests(client: ObtraceClient) -> None:
@@ -166,9 +168,86 @@ def _patch_httpx(client: ObtraceClient) -> None:
     _patched_httpx = True
 
 
+def _patch_httpx_async(client: ObtraceClient) -> None:
+    global _original_httpx_async_send, _patched_httpx_async
+    if _patched_httpx_async:
+        return
+    try:
+        import httpx
+    except ImportError:
+        return
+
+    _original_httpx_async_send = httpx.AsyncClient.send
+
+    async def _instrumented_async_send(self: Any, request: Any, **kwargs: Any) -> Any:
+        method = str(getattr(request, "method", "GET"))
+        url = str(getattr(request, "url", ""))
+        trace_id = random_hex(16)
+        span_id = random_hex(8)
+        traceparent = create_traceparent(trace_id, span_id)
+        if hasattr(request, "headers"):
+            request.headers.setdefault("traceparent", traceparent)
+
+        started = time.time()
+        try:
+            response = await _original_httpx_async_send(self, request, **kwargs)
+            dur_ms = int((time.time() - started) * 1000)
+            status = getattr(response, "status_code", 0)
+            client.span(
+                f"http.client {method.upper()} {url}",
+                trace_id=trace_id,
+                span_id=span_id,
+                start_unix_nano=str(int(started * 1_000_000_000)),
+                end_unix_nano=str(int(time.time() * 1_000_000_000)),
+                status_code=status,
+                attrs={"http.method": method.upper(), "http.url": url, "http.status_code": status, "duration_ms": dur_ms},
+            )
+            client.log(
+                "info",
+                f"httpx.async {method.upper()} {url} -> {status}",
+                SDKContext(
+                    trace_id=trace_id,
+                    span_id=span_id,
+                    method=method.upper(),
+                    endpoint=url,
+                    status_code=status,
+                    attrs={"duration_ms": dur_ms},
+                ),
+            )
+            return response
+        except Exception as exc:
+            dur_ms = int((time.time() - started) * 1000)
+            client.span(
+                f"http.client {method.upper()} {url}",
+                trace_id=trace_id,
+                span_id=span_id,
+                start_unix_nano=str(int(started * 1_000_000_000)),
+                end_unix_nano=str(int(time.time() * 1_000_000_000)),
+                status_code=500,
+                status_message=str(exc),
+                attrs={"http.method": method.upper(), "http.url": url, "duration_ms": dur_ms},
+            )
+            client.log(
+                "error",
+                f"httpx.async {method.upper()} {url} failed: {exc}",
+                SDKContext(
+                    trace_id=trace_id,
+                    span_id=span_id,
+                    method=method.upper(),
+                    endpoint=url,
+                    attrs={"duration_ms": dur_ms},
+                ),
+            )
+            raise
+
+    httpx.AsyncClient.send = _instrumented_async_send  # type: ignore[assignment]
+    _patched_httpx_async = True
+
+
 def install_http_instrumentation(client: ObtraceClient) -> None:
     _patch_requests(client)
     _patch_httpx(client)
+    _patch_httpx_async(client)
 
 
 def _unpatch_requests() -> None:
@@ -197,6 +276,20 @@ def _unpatch_httpx() -> None:
     _patched_httpx = False
 
 
+def _unpatch_httpx_async() -> None:
+    global _original_httpx_async_send, _patched_httpx_async
+    if not _patched_httpx_async:
+        return
+    try:
+        import httpx
+        httpx.AsyncClient.send = _original_httpx_async_send  # type: ignore[assignment]
+    except ImportError:
+        pass
+    _original_httpx_async_send = None
+    _patched_httpx_async = False
+
+
 def uninstall_http_instrumentation() -> None:
     _unpatch_requests()
     _unpatch_httpx()
+    _unpatch_httpx_async()

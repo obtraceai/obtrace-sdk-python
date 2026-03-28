@@ -1,9 +1,12 @@
+LICENSE
 README.md
 pyproject.toml
 src/obtrace_sdk/__init__.py
+src/obtrace_sdk/auto_http.py
 src/obtrace_sdk/client.py
 src/obtrace_sdk/context.py
 src/obtrace_sdk/http.py
+src/obtrace_sdk/logging_handler.py
 src/obtrace_sdk/otlp.py
 src/obtrace_sdk/semantic_metrics.py
 src/obtrace_sdk/types.py

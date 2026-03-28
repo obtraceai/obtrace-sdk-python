@@ -1,10 +1,12 @@
 Metadata-Version: 2.4
 Name: obtrace-sdk-python
-Version: 1.0.0
+Version: 1.0.2
 Summary: Obtrace Python SDK
 Author: Obtrace
+License-Expression: MIT
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Provides-Extra: requests
 Requires-Dist: requests>=2.31.0; extra == "requests"
 Provides-Extra: httpx
@@ -14,6 +16,7 @@ Requires-Dist: fastapi>=0.112.0; extra == "fastapi"
 Requires-Dist: starlette>=0.37.0; extra == "fastapi"
 Provides-Extra: flask
 Requires-Dist: flask>=3.0.0; extra == "flask"
+Dynamic: license-file
 
 # obtrace-sdk-python
 
@@ -33,7 +36,7 @@ SDK is thin/dumb.
 ## Install
 
 ```bash
-pip install .
+pip install obtrace-sdk-python
 ```
 
 ## Configuration
