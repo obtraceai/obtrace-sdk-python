@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import platform
+import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, Optional
+from urllib.request import Request, urlopen
 
 from opentelemetry._logs.severity import SeverityNumber
 from opentelemetry.instrumentation.logging.handler import LoggingHandler
@@ -37,6 +40,36 @@ class ObtraceClient:
             logger_provider=self._providers.logger_provider,
         )
         logging.root.addHandler(self._otel_logging_handler)
+        self.initialized = False
+        threading.Thread(target=self._handshake, daemon=True).start()
+
+    def _handshake(self) -> None:
+        import json
+        base = self.cfg.ingest_base_url.rstrip("/")
+        if not base:
+            return
+        try:
+            payload = json.dumps({
+                "sdk": "obtrace-sdk-python",
+                "sdk_version": "1.0.0",
+                "service_name": self.cfg.service_name,
+                "service_version": self.cfg.service_version,
+                "runtime": "python",
+                "runtime_version": platform.python_version(),
+            }).encode()
+            req = Request(f"{base}/v1/init", data=payload, method="POST")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("Authorization", f"Bearer {self.cfg.api_key}")
+            with urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    self.initialized = True
+                    if self.cfg.debug:
+                        _logger.info("obtrace: init handshake OK")
+                elif self.cfg.debug:
+                    _logger.error("obtrace: init handshake failed: %d", resp.status)
+        except Exception as e:
+            if self.cfg.debug:
+                _logger.error("obtrace: init handshake error: %s", e)
 
     def __enter__(self) -> ObtraceClient:
         return self
