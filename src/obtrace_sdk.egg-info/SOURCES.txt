@@ -1,0 +1,16 @@
+LICENSE
+README.md
+pyproject.toml
+src/obtrace_sdk/__init__.py
+src/obtrace_sdk/client.py
+src/obtrace_sdk/logging_handler.py
+src/obtrace_sdk/otel_setup.py
+src/obtrace_sdk/semantic_metrics.py
+src/obtrace_sdk/types.py
+src/obtrace_sdk.egg-info/PKG-INFO
+src/obtrace_sdk.egg-info/SOURCES.txt
+src/obtrace_sdk.egg-info/dependency_links.txt
+src/obtrace_sdk.egg-info/requires.txt
+src/obtrace_sdk.egg-info/top_level.txt
+tests/test_client.py
+tests/test_semantic_metrics.py

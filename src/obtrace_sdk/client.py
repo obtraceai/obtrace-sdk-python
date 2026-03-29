@@ -50,8 +50,8 @@ class ObtraceClient:
             return
         try:
             payload = json.dumps({
-                "sdk": "obtrace-sdk",
-                "sdk_version": "1.0.0",
+                "sdk": "obtrace-sdk-python",
+                "sdk_version": "1.0.3",
                 "service_name": self.cfg.service_name,
                 "service_version": self.cfg.service_version,
                 "runtime": "python",

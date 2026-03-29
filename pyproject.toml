@@ -3,8 +3,8 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "obtrace-sdk"
-version = "1.0.0"
+name = "obtrace-sdk-python"
+version = "1.0.3"
 description = "Obtrace Python SDK"
 license = "MIT"
 requires-python = ">=3.10"

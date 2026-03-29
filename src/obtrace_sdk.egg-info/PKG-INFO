@@ -1,0 +1,142 @@
+Metadata-Version: 2.4
+Name: obtrace-sdk
+Version: 1.0.0
+Summary: Obtrace Python SDK
+Author: Obtrace
+License-Expression: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: opentelemetry-sdk>=1.20.0
+Requires-Dist: opentelemetry-api>=1.20.0
+Requires-Dist: opentelemetry-exporter-otlp-proto-http>=1.20.0
+Requires-Dist: opentelemetry-instrumentation-requests
+Requires-Dist: opentelemetry-instrumentation-httpx
+Requires-Dist: opentelemetry-instrumentation-urllib
+Requires-Dist: opentelemetry-instrumentation-flask
+Requires-Dist: opentelemetry-instrumentation-fastapi
+Requires-Dist: opentelemetry-instrumentation-django
+Requires-Dist: opentelemetry-instrumentation-logging
+Requires-Dist: opentelemetry-instrumentation-psycopg2
+Requires-Dist: opentelemetry-instrumentation-redis
+Requires-Dist: opentelemetry-instrumentation-sqlalchemy
+Requires-Dist: opentelemetry-instrumentation-celery
+Requires-Dist: opentelemetry-instrumentation-grpc
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Dynamic: license-file
+
+# obtrace-sdk-python
+
+Python backend SDK for Obtrace telemetry transport and instrumentation.
+
+## Scope
+- OTLP logs/traces/metrics transport
+- Context propagation
+- HTTP instrumentation (requests/httpx)
+- Framework helpers (FastAPI, Flask)
+
+## Design Principle
+SDK is thin/dumb.
+- No business logic authority in client SDK.
+- Policy and product logic are server-side.
+
+## Install
+
+```bash
+pip install obtrace-sdk-python
+```
+
+## Configuration
+
+Required:
+- `api_key`
+- `ingest_base_url`
+- `service_name`
+
+Optional (auto-resolved from API key on the server side):
+- `tenant_id`
+- `project_id`
+- `app_id`
+- `env`
+- `service_version`
+
+## Quickstart
+
+### Simplified setup
+
+The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only three fields are needed:
+
+```python
+from obtrace_sdk import ObtraceClient, ObtraceConfig
+
+client = ObtraceClient(
+    ObtraceConfig(
+        api_key="obt_live_...",
+        ingest_base_url="https://ingest.obtrace.io",
+        service_name="my-service",
+    )
+)
+```
+
+### Full configuration
+
+For advanced use cases you can override the resolved values explicitly:
+
+```python
+from obtrace_sdk import ObtraceClient, ObtraceConfig, SemanticMetrics
+
+client = ObtraceClient(
+    ObtraceConfig(
+        api_key="<API_KEY>",
+        ingest_base_url="https://inject.obtrace.ai",
+        service_name="python-api",
+        env="prod",
+    )
+)
+
+client.log("info", "started")
+client.metric(SemanticMetrics.RUNTIME_CPU_UTILIZATION, 0.41)
+client.span(
+    "checkout.charge",
+    attrs={
+        "feature.name": "checkout",
+        "payment.provider": "stripe",
+    },
+)
+client.flush()
+```
+
+## Canonical metrics and custom spans
+
+- Use `SemanticMetrics` for the product-wide metric catalog.
+- Custom spans use `client.span(name, attrs=...)`.
+- Keep free-form metric names only for truly product-specific signals that are not part of the shared catalog.
+
+## Frameworks and HTTP
+
+- Framework helpers: FastAPI and Flask
+- HTTP instrumentation: `requests` and `httpx`
+- Reference docs:
+  - `docs/frameworks.md`
+  - `docs/http-instrumentation.md`
+
+## Production Hardening
+
+1. Keep `api_key` only in server-side secret storage.
+2. Use one key per environment and rotate periodically.
+3. Keep fail-open behavior (telemetry must not break request flow).
+4. Validate ingestion after deploy using Query Gateway and ClickHouse checks.
+
+## Troubleshooting
+
+- No telemetry: validate `ingest_base_url`, API key, and egress connectivity.
+- Missing correlation: ensure propagation headers are injected on outbound HTTP.
+- Short-lived workers: call `flush()` before process exit.
+
+## Documentation
+- Docs index: `docs/index.md`
+- LLM context file: `llm.txt`
+- MCP metadata: `mcp.json`
+
+## Reference
