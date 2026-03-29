@@ -7,8 +7,8 @@ from typing import Any, Dict, Optional
 @dataclass(slots=True)
 class ObtraceConfig:
     api_key: str
-    ingest_base_url: str
     service_name: str
+    ingest_base_url: str = "https://ingest.obtrace.ai"
     service_version: str = "0.0.0"
     tenant_id: Optional[str] = None
     project_id: Optional[str] = None

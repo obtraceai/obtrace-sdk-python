@@ -23,8 +23,8 @@ _initialized = False
 class ObtraceClient:
     def __init__(self, cfg: ObtraceConfig):
         global _initialized
-        if not cfg.api_key or not cfg.ingest_base_url or not cfg.service_name:
-            raise ValueError("api_key, ingest_base_url and service_name are required")
+        if not cfg.api_key or not cfg.service_name:
+            raise ValueError("api_key and service_name are required")
         if _initialized:
             _logger.warning("obtrace: ObtraceClient already initialized, creating duplicate instance")
         _initialized = True

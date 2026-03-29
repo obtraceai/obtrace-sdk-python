@@ -11,7 +11,6 @@ from obtrace_sdk.types import ObtraceConfig, SDKContext
 def _make_client(**overrides):
     defaults = dict(
         api_key="devkey",
-        ingest_base_url="https://ingest.obtrace.ai",
         service_name="py-test",
         auto_instrument_http=False,
     )
@@ -84,7 +83,7 @@ class ClientTests(unittest.TestCase):
 
     def test_validation_error_on_missing_fields(self):
         with self.assertRaises(ValueError):
-            ObtraceClient(ObtraceConfig(api_key="", ingest_base_url="http://x", service_name="svc"))
+            ObtraceClient(ObtraceConfig(api_key="", service_name="svc"))
 
 
 if __name__ == "__main__":

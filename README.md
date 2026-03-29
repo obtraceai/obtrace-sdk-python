@@ -23,8 +23,10 @@ pip install obtrace-sdk-python
 
 Required:
 - `api_key`
-- `ingest_base_url`
 - `service_name`
+
+Optional (defaults to `https://ingest.obtrace.ai`):
+- `ingest_base_url`
 
 Optional (auto-resolved from API key on the server side):
 - `tenant_id`
@@ -37,7 +39,7 @@ Optional (auto-resolved from API key on the server side):
 
 ### Simplified setup
 
-The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only three fields are needed:
+The API key resolves `tenant_id`, `project_id`, `app_id`, and `env` automatically on the server side, so only two fields are needed:
 
 ```python
 from obtrace_sdk import ObtraceClient, ObtraceConfig
@@ -45,7 +47,6 @@ from obtrace_sdk import ObtraceClient, ObtraceConfig
 client = ObtraceClient(
     ObtraceConfig(
         api_key="obt_live_...",
-        ingest_base_url="https://ingest.obtrace.io",
         service_name="my-service",
     )
 )
@@ -61,7 +62,6 @@ from obtrace_sdk import ObtraceClient, ObtraceConfig, SemanticMetrics
 client = ObtraceClient(
     ObtraceConfig(
         api_key="<API_KEY>",
-        ingest_base_url="https://inject.obtrace.ai",
         service_name="python-api",
         env="prod",
     )

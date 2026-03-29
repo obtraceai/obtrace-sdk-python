@@ -2,7 +2,6 @@
 
 Required:
 - `api_key`
-- `ingest_base_url`
 - `service_name`
 
 Optional:
