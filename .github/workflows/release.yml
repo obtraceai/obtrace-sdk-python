@@ -59,7 +59,7 @@ jobs:
       - run: pip install build twine
       - run: sed -i "s/version = .*/version = \"${{ steps.version.outputs.version }}\"/" pyproject.toml
       - run: python -m build
-      - run: twine upload dist/*
+      - run: twine upload --verbose dist/*
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
