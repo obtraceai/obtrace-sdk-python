@@ -87,12 +87,11 @@ def setup_otel(cfg: ObtraceConfig) -> OtelProviders:
     except Exception:
         pass
 
-    from opentelemetry.propagate import set_global_textmap
-    from opentelemetry.propagators.composite import CompositePropagator
-    from opentelemetry.trace.propagation import TraceContextTextMapPropagator
     try:
-        set_global_textmap(CompositePropagator([TraceContextTextMapPropagator()]))
-    except Exception:
+        from opentelemetry.propagate import set_global_textmap
+        from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+        set_global_textmap(TraceContextTextMapPropagator())
+    except (ImportError, Exception):
         pass
 
     meter_provider = MeterProvider(
